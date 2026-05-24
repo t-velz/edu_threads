@@ -25,13 +25,16 @@ library(tidyverse)
 library(car)
 library(psych)
 
-edd<- fread("edd_2026_updated.csv")
+rm(list = ls(all = TRUE))   # use to get rid of old object in environment
+
+edd<- fread("all_threads_2026_rt.csv")
 names(edd)
 #---------------------------------------------------------#
 #1-drop extra vars----
 
 
 # Define the variables to be removed
+
 vars_to_remove <- c("downvotes", "golds", "t_total_awards", "t_golds",  #these 4 drop vars added 5/22/26
                   "profan_count", "profan_ave", "ang_ave", 
                   "ang_count", "ang_n_ave", "ang_n_count", 
@@ -49,7 +52,8 @@ vars_to_remove <- c("downvotes", "golds", "t_total_awards", "t_golds",  #these 4
                   "disg_ave_rt", "disg_n_ave_rt", "fear_ave_rt", 
                   "fear_n_ave_rt", "joy_ave_rt", "joy_n_ave_rt", 
                   "sad_ave_rt", "sad_n_ave_rt", "surp_ave_rt", 
-                  "surp_n_ave_rt", "trust_ave_rt", "trust_n_ave_rt")
+                  "surp_n_ave_rt", "trust_ave_rt", "trust_n_ave_rt"
+                )
 
 
 # Remove the variables from the edd dataset
@@ -62,9 +66,12 @@ edd <- edd %>%
 
 names(edd)
 
-plot(edd$score, edd$upvotes)
 table(edd$profan_count_rt)
-table(edd$demo_3_hi_vars, edd$key_combo)
+hist(edd$profan_count_rt)
+summary(edd$profan_count_rt)
+summary(edd$i_feel_rt)
+hist(edd$i_feel_rt)
+
 
 #______________Start variable creation section___________#
 
@@ -440,7 +447,7 @@ edd$deads_down_rt)
 
 #  26. zoom_disengaged----
 
-edd$zoom_disengaged<- log(1+edd$nt_turn_camera_on_rt+
+edd$zoom_disengaged_iln<- log(1+edd$nt_turn_camera_on_rt+
 edd$nt_turn_on_mic_rt+
 edd$nt_type_in_chat_rt+
 edd$no_one_responds_rt+
@@ -503,6 +510,165 @@ edd$they_want_rt+
 edd$they_dont_believe_rt+
 edd$they_dont_think_rt)
 
+rm(equity_gouls_iln)
+
+# 32.   equity_ghouls----
+
+edd$equity_gouls_iln<- log(1+edd$bought_out_by_rt+
+edd$investment_firm_rt+
+edd$equity_firm_rt+
+edd$sucked_dry_rt+
+edd$hollowed_out_rt)
+
+# 33.  gesellschaft----
+
+edd$gesellschaft_iln<- log(1+edd$poser_rt+
+edd$of_course_rt+
+edd$the_type_of_guy_rt+
+edd$trying_to_sell_you_rt+
+edd$posting_thirst_traps_rt+
+edd$performative_and_cringe_rt+
+edd$tenk_month_rt+
+edd$niche_a_good_product_rt+
+edd$listing_optimization_rt+
+edd$partner_with_rt+
+edd$affiliates_rt+
+edd$influencer_rt+
+edd$making_money_rt+
+edd$make_money_rt)
+
+34.  grind_culture----
+
+edd$grind_culture_iln<- log(1+edd$never_stops_hustling_rt+
+edd$so_passionate_rt+
+edd$i_care_deeply_rt+
+edd$if_your_team_isnt_rt+
+edd$grind_culture_rt+
+edd$bosses_to_exploit_rt+
+edd$this_isnt_satire_rt+
+edd$theyre_locked_in_rt+
+edd$hey_are_paid_rt+
+edd$my_priorities_rt+
+edd$up_by_the_bootstraps_rt)
+
+
+35.   platform_abuse----
+
+edd$platform_abuse_iln<- log(1+edd$rude_rt+
+edd$abusive_rt+
+edd$block_them_rt+
+edd$bully_other_sellers_rt+
+edd$off_the_platform_rt+
+edd$report_them_rt+
+edd$report_this_rt+
+edd$d_cancel_rt+
+edd$how_an_item_rt+
+edd$signature_confirmation_rt+
+edd$cancel_and_block_rt+
+edd$red_flag_rt+
+edd$trust_your_gut_rt+
+edd$the_entitlement_rt+
+edd$not_your_fault_rt+
+edd$honest_feedback_rt+
+edd$leave_a_neg_rt+
+edd$just_block_rt+
+edd$block_and_report_rt+
+edd$threatening_legal_rt+
+edd$worst_buyers_rt+
+edd$negative_feedback_rt+
+edd$move_on_rt+
+edd$showing_my_face_rt+
+edd$nt_show_rt+
+edd$not_show_rt)
+
+36.  platform_pollution----
+
+edd$platform_pollution_iln<- log(1+edd$more_ads_than_content_rt+
+edd$minutes_of_ads_rt+
+edd$site_got_polluted_rt+
+edd$real_names_policy_rt+
+edd$prove_it_before_rt+
+edd$your_real_name_rt+
+edd$legal_name_rt+
+edd$cess_pool_rt+
+edd$engagement_farming_rt+
+edd$bot_post_rt+
+edd$spam_rt+
+edd$repost_rt)
+
+summary(edd$platform_scam)
+
+37. platform_scam----
+
+edd$platform_scam_iln<- log(1+edd$cash_rides_rt+
+edd$cant_be_verified_rt+
+edd$safety_reasons_rt+
+edd$fraudulent_activity_rt+
+edd$scammy_rt+
+edd$to_scam_you_rt+
+edd$persons_feedback_rt+
+edd$up_the_username_rt+
+edd$troll_rt+
+edd$profile_shows_rt)
+
+38.  ride_platform_scam----
+
+edd$ride_platform_scam_iln<- log(1+
+edd$uber_support_rt+
+edd$uber_doesnt_give_rt+
+edd$honest_drivers_rt+
+edd$undesirable_drivers_rt+
+edd$lyft_driver_rt)
+
+39.  platform_vampire----
+
+edd$platform_vampire_iln<- log(1+edd$datamining_app_rt+
+edd$laundry_machine_rt+
+edd$crazy_expensive_rt+
+edd$demanding_updates_rt+
+edd$smart_t_vs_rt+
+edd$healthcare_system_rt+
+edd$not_repairable_rt+
+edd$your_only_option_rt+
+edd$create_a_user_account_rt+
+edd$promote_sponsored_result_rt+
+edd$ai_crap_rt+
+edd$that_garbage_rt+
+edd$sponsored_ones_rt+
+edd$are_worthless_rt+
+edd$forced_to_pay_rt+
+edd$youtube_ads_rt+
+edd$button_unclickable_rt+
+edd$multiple_ads_rt+
+edd$dont_bother_watching_rt+
+edd$appliances_that_die_rt+
+edd$subscribe_to_use_rt+
+edd$later_removed_rt+
+edd$battery_life_rt+
+edd$requirement_to_link_rt+
+edd$required_to_link_rt+
+edd$must_link_to_rt+
+edd$data_will_be_sold_rt+
+edd$apps_being_required_rt+
+edd$app_required_rt+
+edd$over_the_air_updates_rt+
+edd$subscription_package_rt+
+edd$impossible_to_repair_rt+
+edd$cheaper_and_cheaper_rt+
+edd$lower_quality_rt+
+edd$hours_cut_rt+
+edd$cutting_corners_rt+
+edd$service_breakdown_rt)
+
+40. platform_resist----
+
+edd$platform_resist_iln<- log(1+edd$i_deleted_my_account_rt+
+edd$users_bleed_away_rt+
+  edd$service_recovery_rt)
+
+
+
+
 #  create other helpful variables----
 # * sub-dummies ----
 
@@ -540,16 +706,16 @@ teenagers = if_else(t_subreddit == "teenagers", 1, 0))
 #  01. admin problem----
 
 admin_prob<- tibble( edd$because_our_admin_rt,
-edd$consequences_are_gone_rt,
-edd$push_for_fewer_suspensions_rt,
-edd$admin_actively_discourage_rt,
-edd$disregard_for_the_teacher_rt,
-edd$administration_is_scared_rt,
+edd$consequences_are_gone_rt,      #not observed
+edd$push_for_fewer_suspensions_rt,      #not observed
+edd$admin_actively_discourage_rt,      #not observed
+edd$disregard_for_the_teacher_rt,      #not observed
+edd$administration_is_scared_rt,      #not observed
 edd$no_discipline_rt,
-edd$public_babysitting_rt,
+edd$public_babysitting_rt,      #not observed
 edd$inmates_run_the_asylum_rt,
 edd$accountability_for_admin_rt,
-edd$responsibility_but_no_power_rt,
+edd$responsibility_but_no_power_rt,      #not observed
 edd$admin_ignores_rt,
 edd$admin_wont_rt,
 edd$admin_dont_rt,
@@ -576,14 +742,14 @@ edd$ai_to_write_rt)
 bad_behavior<- tibble(edd$act_out_rt,
 edd$acting_out_rt,
 edd$interupt_rt,
-edd$student_abruptly_state_rt,
+edd$student_abruptly_state_rt,      #not observed
 edd$dismissive_remark_rt,
-edd$ignore_schedule_rt,
-edd$want_preference_rt,
+edd$ignore_schedule_rt,      #not observed
+edd$want_preference_rt,      #not observed
 edd$should_accommodate_rt,
 edd$demanding_rt,
-edd$expecting_to_be_accommodated_rt,
-edd$vacations_during_the_semester_rt)
+edd$expecting_to_be_accommodated_rt,      #not observed
+edd$vacations_during_the_semester_rt)      #not observed
 
 #  05. bad parent----
 bad_parent<- tibble(edd$nt_care_about_school_rt,
@@ -604,23 +770,23 @@ edd$i_cant_anymore_rt,
 edd$burned_out_rt,
 edd$burn_out_rt,
 edd$i_quit_rt,
-edd$considering_leaving_this_profession_rt,
+edd$considering_leaving_this_profession_rt,      #not observed
 edd$love_teaching_but_rt,
 edd$why_am_i_even_here_rt,
-edd$like_i_cant_win_rt,
+edd$like_i_cant_win_rt,      #not observed
 edd$wasting_my_time_rt,
 edd$why_do_i_even_try_rt)
 
 #  07. change is real----
 change_is_real<- tibble(edd$worse_than_last_year_rt,
-edd$is_it_just_my_school_rt,
+edd$is_it_just_my_school_rt,      #not observed
 edd$dumbed_down_rt,
-edd$many_students_didnt_understand_rt,
-edd$not_just_a_few_students_rt,
+edd$many_students_didnt_understand_rt,      #not observed
+edd$not_just_a_few_students_rt,      #not observed
 edd$no_in_between_rt,
-edd$lower_half_has_plummeted_rt,
-edd$say_they_never_learned_rt,
-edd$increasing_proportion_of_students_rt,
+edd$lower_half_has_plummeted_rt,      #not observed
+edd$say_they_never_learned_rt,      #not observed
+edd$increasing_proportion_of_students_rt,      #not observed
 edd$never_did_before_rt)
 
 #  08. cheating----
@@ -640,13 +806,13 @@ edd$customer_is_always_right_rt)
 dont_attend<- tibble(edd$walk_the_halls_rt,
 edd$skip_class_rt,
 edd$low_attendance_rt,
-edd$is_class_mandatory_rt,
+edd$is_class_mandatory_rt,      #not observed
 edd$skipping_class_rt,
 edd$is_attendance_rt)
 
 #  11. extrinsic----
-extrinsic<- tibble(edd$concerned_with_points_rt,
-edd$resistance_to_knowing_rt,
+extrinsic<- tibble(edd$concerned_with_points_rt,      #not observed
+edd$resistance_to_knowing_rt,      #not observed
 edd$teased_rt,
 edd$be_made_fun_of_rt,
 edd$worried_about_others_rt,
@@ -667,12 +833,12 @@ edd$nt_make_mistakes_rt,
 edd$fear_mistakes_rt,
 edd$nt_mess_up_rt,
 edd$averse_to_taking_risks_rt,
-edd$perfect_self_image_rt,
+edd$perfect_self_image_rt,      #not observed
 edd$chase_approval_rt,
 edd$seek_approval_rt,
-edd$chase_praise_rt,
-edd$seek_praise_rt,
-edd$fear_judgement_rt,
+edd$chase_praise_rt,      #not observed
+edd$seek_praise_rt,      #not observed
+edd$fear_judgement_rt,      #not observed
 edd$afraid_of_judgement_rt,
 edd$nt_want_to_be_judged_rt,
 edd$extrinsic_motiv_rt,
@@ -691,11 +857,11 @@ edd$in_diapers_rt,
 edd$potty_train_rt,
 edd$never_develop_rt,
 edd$stick_figure_rt,
-edd$who_couldnt_properly_rt,
+edd$who_couldnt_properly_rt,      #not observed
 edd$nt_even_add_rt,
 edd$no_idea_how_to_rt,
 edd$at_grade_level_rt,
-edd$below_grade_level_rt)
+edd$below_grade_level_rt)      #not observed
 
 #  13. falling_behind----
 
@@ -720,16 +886,16 @@ edd$lack_fundament_rt)
 #  14. helicopter parents----
 
 helicopter_parents<- tibble(edd$parent_wants_rt,
-edd$nt_hold_their_child_accountable_rt,
+edd$nt_hold_their_child_accountable_rt,      #not observed
 edd$helicopter_parent_rt,
-edd$reply_from_her_parent_rt,
-edd$her_childs_doing_rt,
-edd$unfair_that_her_child_rt,
+edd$reply_from_her_parent_rt,      #not observed
+edd$her_childs_doing_rt,      #not observed
+edd$unfair_that_her_child_rt,      #not observed
 edd$both_parents_rt,
 edd$with_her_mother_rt,
 edd$with_his_mother_rt,
-edd$email_from_the_students_rt,
-edd$parents_along_with_them_rt,
+edd$email_from_the_students_rt,      #not observed
+edd$parents_along_with_them_rt,      #not observed
 edd$parental_intervention_rt,
 edd$bring_their_parent_rt)
 
@@ -773,7 +939,7 @@ edd$no_consequences_rt,
 edd$failing_rt,
 edd$passed_along_rt,
 edd$accountable_for_their_failure_rt,
-edd$they_know_they_arent_rt,
+edd$they_know_they_arent_rt,      #not observed
 edd$not_fail_rt,
 edd$nt_fail_rt,
 edd$lack_of_consequences_rt,
@@ -800,15 +966,15 @@ edd$nt_want_to_stand_out_rt,
 edd$face_in_the_crowd_rt,
 edd$no_passion_rt,
 edd$too_cool_to_care_rt,
-edd$too_tough_to_try_rt,
-edd$too_tuff_to_try_rt,
+edd$too_tough_to_try_rt,      #not observed
+edd$too_tuff_to_try_rt,      #not observed
 edd$no_personality_rt,
-edd$nt_lose_aura_rt,
+edd$nt_lose_aura_rt,      #not observed
 edd$no_aura_rt,
 edd$nt_start_a_conversation_rt,
 edd$media_pressures_rt,
 edd$nt_care_rt,
-edd$auraless_rt)
+edd$auraless_rt)      #not observed
 
 #  21. not engaged----
 
@@ -845,7 +1011,7 @@ edd$never_work_rt,
 edd$never_partic_rt,
 edd$nt_do_anything_rt,
 edd$do_nothing_rt,
-edd$nt_try_before_rt,
+edd$nt_try_before_rt,      #not observed
 edd$to_try_rt,
 edd$lack_of_effort_rt,
 edd$nt_practice_rt,
@@ -896,7 +1062,7 @@ edd$crickets_rt,
 edd$t_even_listen_rt,
 edd$sleeping_in_class_rt,
 edd$barely_participate_rt,
-edd$not_following_discussion_rt,
+edd$not_following_discussion_rt,      #not observed
 edd$see_me_as_a_movie_rt,
 edd$no_question_rt,
 edd$roll_eyes_rt,
@@ -906,10 +1072,10 @@ edd$deads_down_rt)
 
 #  26. zoom_disengaged----
 
-zoom_disengaged<- tibble(edd$nt_turn_camera_on_rt,
-edd$nt_turn_on_mic_rt,
-edd$nt_type_in_chat_rt,
-edd$no_one_responds_rt,
+zoom_disengaged<- tibble(edd$nt_turn_camera_on_rt,      #not observed
+edd$nt_turn_on_mic_rt,      #not observed
+edd$nt_type_in_chat_rt,      #not observed
+edd$no_one_responds_rt,     
 edd$muted_rt,
 edd$talking_to_myself_rt,
 edd$deleted_rt)
@@ -986,7 +1152,7 @@ round(cor(burned_out, edd$burned_out_iln),digits = 3)
 round(cor(change_is_real, edd$change_is_real_iln),digits = 3)
 round(cor(cheat, edd$cheat_iln),digits = 3)
 round(cor(consumer_model, edd$consumer_model_iln),digits = 3)
-round(cor(dont_attend, edd$attendance_iln),digits = 3)
+round(cor(dont_attend, edd$dont_attend_iln),digits = 3)
 round(cor(extrinsic, edd$extrinsic_iln),digits = 3)
 round(cor(fall_behind_basics, edd$fall_behind_basics_iln),digits = 3)
 round(cor(falling_behind, edd$falling_behind_iln),digits = 3)
