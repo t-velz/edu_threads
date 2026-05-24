@@ -1173,3 +1173,38 @@ round(cor(feed_socials, edd$feed_socials_iln),digits = 3)
 round(cor(i_think, edd$i_think_iln),digits = 3)
 round(cor(thanks, edd$thanks_iln),digits = 3)
 round(cor(they_think, edd$they_think_iln),digits = 3)
+
+
+
+
+  # edu_related is 1 if the thread comes from any of the listed subreddits,
+  # 0 otherwise.  %in% checks membership in the vector in one step, which is
+  # cleaner than chaining 15 separate if_else() conditions with | operators.
+
+# write edu 15 dataset to csv---- 
+edd <- edd %>% 
+mutate(
+  edu_related = if_else(t_subreddit %in% c(
+    "Teachers",
+    "college",
+    "AskAcademia",
+    "academia",
+    "GradSchool",
+    "Professors",
+    "education",
+    "GenZ",
+    "GenAlpha",
+    "GenX",
+    "millenials",
+    "highereducation",
+    "Parenting",
+    "socialskills",
+    "teenagers"
+  ), 1, 0)
+)
+
+edd |>
+  filter(edu_related == 1)  -> edu_threads
+
+fwrite(edu_threads, "edd15subs_indices.csv")
+
