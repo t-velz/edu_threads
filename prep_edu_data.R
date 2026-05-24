@@ -510,7 +510,6 @@ edd$they_want_rt+
 edd$they_dont_believe_rt+
 edd$they_dont_think_rt)
 
-rm(equity_gouls_iln)
 
 # 32.   equity_ghouls----
 
@@ -596,7 +595,7 @@ edd$bot_post_rt+
 edd$spam_rt+
 edd$repost_rt)
 
-summary(edd$platform_scam)
+# summary(edd$platform_scam)
 
 37. platform_scam----
 
