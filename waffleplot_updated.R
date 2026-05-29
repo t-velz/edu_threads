@@ -1,214 +1,122 @@
 
----------------------------------------------------------#
-# Creating TWO waffle plots using reddit data (one per data collection period)
-# https://materialui.co/colors
-#
-# original code in 2025 by: Miracle Sammons
-# updated in 2026 by Ayesha Akbar and Ted Welser
-##-----------------------------------------------------#
-#---------------------------------------------------------#
+# ---------------------------------------------------------#
+#   edu 2026 proj
+#   Ted, Will, Tess, Ayesha
+# ---------------------------------------------------------#
 
 #          _.-^~~^^^`~-,_,,~''''''```~,''``~'``~,
 #  ______,'  -o  :.  _    .          ;     ,'`,  `.
 # (      -\.._,.;;'._ ,(   }        _`_-_,,    `, `,
 #  ``~~~~~~'   ((/'((((____/~~~~~~'(,(,___>      `~'
-#---------------------------------------------------------#                     
-
-# add as needed to list
-install.packages(c("ggnewscale", "patchwork", "pscl"))
-
-#Load necessary libraries for data wrangling and plotting, etc
-
-library(tidyverse)     # Data manipulation and visualization
-library(lubridate)     # Handling date/time
-library(ggnewscale)    # Allows multiple fill/color scales in a ggplot
-library(patchwork)     # Combines multiple plots into one
-library(pscl)          # Political Science Computational Laboratory
-library(data.table)    # fast read and write
-
-#   Load data from local
-
-edd<- fread("edd15subs_indices.csv")
-
-sum(edd$t_comments)
-table(edd$t_subreddit)
-
-
+# ---------------------------------------------------------#
 ##-------------------------------------------------------#
-# Creating a waffle plot using reddit data
+# Creating TWO waffle plots using reddit data
 #          https://materialui.co/colors
 #
 #  original code in 2025 by: Miracle Sammons
 #  updated in 2026 by Ayesha Akbar and Ted Welser
 ##-----------------------------------------------------#
 
-
-
-# ----------------------------------------
-# STEP 0: For updated version, 2026
-# use filter to create two datasets by dividing
-# at gap between the two ~ year long data collection
-# periods.  We will make two versions of the plot
-# one for each time period that are otherwise 
-# similar.   The API changed and reduced the #
-# of threads allowed per year period to ~500 per
-# subreddit, rather than 1000.  So we want to
-# avoid conflating sampling change with empirical change
-# After splitting into the
-# samples we should explore making a random sample
-# of 480 per each subreddit.       
-# ----------------------------------------
-
-
-#   first time through try running the code as is
-#    notice if it throws an error, I remember there
-#  was a depracated funtion that would still work after
-#  the error that should be updated.  
-
-
-
-
 # Load necessary libraries
 library(tidyverse)
 library(lubridate)
 
-# NOTE: if ggnewscale or patchwork are not installed yet, run:
+# NOTE: if ggnewscale or patchwork are not installed, run:
 # install.packages(c("ggnewscale", "patchwork"))
 library(ggnewscale)
 library(patchwork)
 
 
 # ----------------------------------------
-# STEP 0: Context for the 2026 update
-# The combined dataset (edd_combined.csv) spans two data collection periods:
-#   Period 1 (2025): ~Feb 2025 – ~Aug 2025  (original ~1000/subreddit API cap)
-#   Period 2 (2026): ~Sep 2025 – ~Feb 2026  (reduced ~500/subreddit API cap)
-# We split at the midpoint gap (~Sep 2025), then take a random sample of
-# 480 threads per subreddit per period to make the two plots comparable.
-# We produce one waffle plot per period, then combine side-by-side.
+# STEP 0: For updated version, 2026
+# use filter to create two datasets by dividing
+# at gap between the two ~year long data collection
+# periods. We will make two versions of the plot
+# one for each time period that are otherwise
+# similar. The API changed and reduced the #
+# of threads allowed per year period to ~500 per
+# subreddit, rather than 1000. So we want to
+# avoid conflating sampling change with empirical change.
+# After splitting into the samples we should explore
+# making a random sample of 480 per each subreddit.
+#
+# 2026 update notes (Ayesha):
+# - Dataset: edd15subs_indices.csv (Jan 2024 - Sep 2025, 15 subreddits)
+# - Split at Jan 1 2025: Period 1 = Jan-Dec 2024, Period 2 = Jan-Sep 2025
+# - Period 1 has 6 subreddits (~500-1000/sub), Period 2 has 15 (~430-500/sub)
+# - Sample 430/subreddit per period (limited by smallest Period 2 sub)
+# - Dates in M/D/YYYY format, parsed with mdy()
+# - Disengagement: average of visible_disen_iln and verbal_disengagement_iln
+# - Subreddit boolean columns derived from t_subreddit
+# - size= updated to linewidth= in geom_tile() (ggplot2 deprecation fix)
 # ----------------------------------------
 
-names(edd)
-
-class(edd$date)
-
 
 # ----------------------------------------
-# STEP 1: clean the data
+# STEP 1: Load and clean the data
 # ----------------------------------------
 
-edd<- fread("edd15subs_indices.csv")
-
-
-#_______________________________________________________________#
-#          make needed changes to variables, additions          #
-#_______________________________________________________________#
-
-#   fix date var using lubridate  #
-library(lubridate)
-
-sum(grepl("deleted", edd$date, ignore.case = TRUE))
-sum(grepl("NA", edd$date, ignore.case = TRUE))
-
-
-edd$date_top_comment <- as.Date(parse_date_time(edd$date, orders = c('mdy', 'ymd')))
-edd$date_thread <- as.Date(parse_date_time(edd$t_date, orders = c('mdy', 'ymd')))
-
-# Check for NA or deleted cases
-sum(is.na(edd$date_top_comment))
-sum(is.na(edd$date_thread))
-
-# Check the range
-range(edd$date_top_comment)
-range(edd$date_thread)
-
-class(edd$date_top_comment)
-class(edd$date_thread)
-
-sum(edd$t_comments)
-table(edd$t_subreddit)
-
-edd_raw <- edd |>
-  filter(t_subreddit %in% c("Professors", "Teachers", "college"),
-         !is.na(date_thread))
-
-sum(edd_raw$t_comments)
-table(edd_raw$t_subreddit)
-
-
-#   make the split into two datasets on Jan 1 2025
-
-# NOTE on column changes from 2025 version:
-#   - Subreddit booleans (sub_teachers, sub_professors, sub_college) are no longer
-#     pre-built; we now derive them from t_subreddit
-#   - Disengagement columns are now visible_disen_iln and visible_disen_ind
-#     (replacing disengage.iln and disengage.i)
-
-# ----------------------------------------
-# STEP 0.5:   Filter to include relevant subreddits only
-# ----------------------------------------
+# Load the 2026 combined dataset
+edd_raw <- read_csv("edd15subs_indices.csv")
 
 edd_raw <- edd_raw %>%
   mutate(
-    date_thread = as.Date(date_thread),
+    # Dates are in M/D/YYYY format in this dataset
+    t_date = mdy(t_date),
 
-    # Disengagement: average of the two measures (same as original)
-    # Derive subreddit booleans from t_subreddit (not pre-built in local CSV)
+    # Derive subreddit boolean columns from t_subreddit
     sub_teachers   = t_subreddit == "Teachers",
-    sub_professors = t_subreddit == "Professors",
-    #sub_professors = t_subreddit %in% c("Professors", "AskAcademia", "GradSchool"),
+    sub_professors = t_subreddit %in% c("Professors", "AskAcademia", "GradSchool", "academia"),
     sub_college    = t_subreddit == "college",
 
-    # Disengagement columns (local CSV uses these names)
-    disengage_combined = rowMeans(select(., not_engaged_iln, visible_disen_iln), na.rm = TRUE)
+    # Disengagement: average of two measures
+    disengage_combined = rowMeans(
+      select(., visible_disen_iln, verbal_disengagement_iln),
+      na.rm = TRUE
+    )
   ) %>%
   filter(!is.na(disengage_combined)) %>%
-  arrange(date_thread)
+  arrange(t_date)
 
-plot(edd_raw$date_thread, edd_raw$ai_rt)
-plot(edd_raw$date_thread, edd_raw$disengage_combined)
 
 # ----------------------------------------
 # STEP 2: Split into two data collection periods
 # ----------------------------------------
-# Period 1: Feb 2025 – Aug 2025 (original API limit ~1000/sub)
-# Period 2: Sep 2025 – Feb 2026 (reduced API limit ~500/sub)
-# Cutoff chosen at Sep 1 2025 based on the sampling change noted in Step 0
-
+# Period 1: Jan 2024 - Dec 2024 (original ~1000/sub API limit, 6 subreddits)
+# Period 2: Jan 2025 - Sep 2025 (reduced ~500/sub API limit, 15 subreddits)
 
 SPLIT_DATE <- as.Date("2025-01-01")
 
-edd_p1 <- edd_raw %>% filter(date_thread < SPLIT_DATE)
-edd_p2 <- edd_raw %>% filter(date_thread >= SPLIT_DATE)
+edd_p1 <- edd_raw %>% filter(t_date < SPLIT_DATE)
+edd_p2 <- edd_raw %>% filter(t_date >= SPLIT_DATE)
 
 cat("Period 1 rows:", nrow(edd_p1), "\n")
 cat("Period 2 rows:", nrow(edd_p2), "\n")
 
 
 # ----------------------------------------
-# STEP 3: Random sample of 480 per subreddit per period
+# STEP 3: Random sample of 430 per subreddit per period
 # ----------------------------------------
-# This equalizes sampling across the API-cap change so we can compare.
+# 430 chosen as the sample size because the smallest
+# subreddit in Period 2 (highereducation) has ~134 rows,
+# so we sample up to 430 where available (replace=FALSE)
 
-set.seed(42)  # for reproducibility
+set.seed(42)
 
-sample_480 <- function(df) {
+sample_n_per_sub <- function(df, n = 430) {
   df %>%
     group_by(t_subreddit) %>%
-    slice_sample(n = 480, replace = FALSE) %>%
+    slice_sample(n = n, replace = FALSE) %>%
     ungroup()
 }
 
-# Only sample if period has enough rows; otherwise take all
-edd_p1_samp <- if (nrow(edd_p1) >= 480) sample_480(edd_p1) else edd_p1
-edd_p2_samp <- if (nrow(edd_p2) >= 480) sample_480(edd_p2) else edd_p2
+edd_p1_samp <- sample_n_per_sub(edd_p1, 430)
+edd_p2_samp <- sample_n_per_sub(edd_p2, 430)
 
 cat("Period 1 sample rows:", nrow(edd_p1_samp), "\n")
 cat("Period 2 sample rows:", nrow(edd_p2_samp), "\n")
 
 
-plot(edd_p1_samp$date_thread, edd_p1_samp$disengage_combined)
-plot(edd_p2_samp$date_thread, edd_p2_samp$disengage_combined)
 # ----------------------------------------
 # STEP 4: Month abbreviation helper
 # ----------------------------------------
@@ -226,22 +134,19 @@ month_abbrev <- function(dates) {
 
 # ----------------------------------------
 # STEP 5: Prepare a single period's data for plotting
-# (deciles, time labels, quartile categories)
 # ----------------------------------------
 
 prepare_period <- function(df) {
-
   df <- df %>%
-    arrange(date_thread) %>%
+    arrange(t_date) %>%
     mutate(
       row_id = row_number(),
       decile = ntile(row_id, 10)
     )
 
-  # Build decile start-date labels
   decile_labels <- df %>%
     group_by(decile) %>%
-    summarize(start_date = min(date_thread), .groups = "drop") %>%
+    summarize(start_date = min(t_date), .groups = "drop") %>%
     mutate(
       time_slice_label = month_abbrev(start_date),
       decile = as.integer(decile)
@@ -256,7 +161,6 @@ prepare_period <- function(df) {
   df <- df %>%
     mutate(time_slice = factor(time_slice_label, levels = decile_labels$time_slice_label))
 
-  # Quartile categories (based on positive disengagement values only)
   qtiles <- quantile(
     df$disengage_combined[df$disengage_combined > 0],
     probs = c(0.25, 0.5, 0.75),
@@ -266,11 +170,11 @@ prepare_period <- function(df) {
   df <- df %>%
     mutate(
       dis_cat = case_when(
-        disengage_combined == 0             ~ "None",
-        disengage_combined <= qtiles[1]     ~ "Q1",
-        disengage_combined <= qtiles[2]     ~ "Q2",
-        disengage_combined <= qtiles[3]     ~ "Q3",
-        disengage_combined >  qtiles[3]     ~ "Q4"
+        disengage_combined == 0         ~ "None",
+        disengage_combined <= qtiles[1] ~ "Q1",
+        disengage_combined <= qtiles[2] ~ "Q2",
+        disengage_combined <= qtiles[3] ~ "Q3",
+        disengage_combined >  qtiles[3] ~ "Q4"
       ),
       dis_cat = factor(dis_cat, levels = c("None", "Q1", "Q2", "Q3", "Q4"))
     )
@@ -290,7 +194,7 @@ make_waffle_df <- function(df, subreddit_column, group_label) {
   df %>%
     filter(.data[[subreddit_column]] == TRUE) %>%
     group_by(time_slice) %>%
-    arrange(dis_cat, date_thread) %>%
+    arrange(dis_cat, t_date) %>%
     mutate(
       id    = row_number(),
       x     = (id - 1) %% 4,
@@ -340,7 +244,7 @@ legend_plot <- ggplot() +
   geom_tile(
     data = legend_df,
     aes(x = x, y = y, fill = dis_cat),
-    color = "black", linewidth = 0.3, width = 0.6, height = 0.6  # linewidth replaces deprecated size
+    color = "black", linewidth = 0.3, width = 0.6, height = 0.6
   ) +
   geom_text(data = legend_df, aes(x = x, y = y - 0.7, label = dis_cat), color = "black", size = 2) +
   scale_fill_manual(values = grey_pal) +
@@ -360,19 +264,16 @@ make_waffle_plot <- function(all_waffle, title_label) {
   df_c <- all_waffle %>% filter(group == "College")
 
   ggplot() +
-    # Teachers layer
     geom_tile(data = df_t, aes(x = x, y = y, fill = dis_cat),
               color = "black", linewidth = 0.1, width = 0.9, height = 0.9) +
     scale_fill_manual(values = pal_teachers, drop = FALSE) +
     ggnewscale::new_scale_fill() +
 
-    # Professors layer
     geom_tile(data = df_p, aes(x = x, y = y, fill = dis_cat),
               color = "black", linewidth = 0.1, width = 0.9, height = 0.9) +
     scale_fill_manual(values = pal_profs, drop = FALSE) +
     ggnewscale::new_scale_fill() +
 
-    # College layer
     geom_tile(data = df_c, aes(x = x, y = y, fill = dis_cat),
               color = "black", linewidth = 0.1, width = 0.9, height = 0.9) +
     scale_fill_manual(values = pal_college, drop = FALSE) +
@@ -387,13 +288,13 @@ make_waffle_plot <- function(all_waffle, title_label) {
     labs(title = title_label) +
     theme_minimal(base_size = 14) +
     theme(
-      panel.grid      = element_blank(),
-      axis.text.x     = element_blank(),
-      axis.title.x    = element_blank(),
-      axis.title.y    = element_blank(),
-      axis.text.y     = element_text(size = 8),
-      axis.ticks.y    = element_line(),
-      legend.position = "none",
+      panel.grid       = element_blank(),
+      axis.text.x      = element_blank(),
+      axis.title.x     = element_blank(),
+      axis.title.y     = element_blank(),
+      axis.text.y      = element_text(size = 8),
+      axis.ticks.y     = element_line(),
+      legend.position  = "none",
       strip.background = element_blank(),
       strip.placement  = "outside",
       strip.text.x     = element_text(size = 7, face = "bold", margin = margin(t = 2, b = 0)),
@@ -402,8 +303,8 @@ make_waffle_plot <- function(all_waffle, title_label) {
     )
 }
 
-waffle_p1 <- make_waffle_plot(all_waffle_p1, "2025 Collection Period (n=480/subreddit)")
-waffle_p2 <- make_waffle_plot(all_waffle_p2, "2026 Collection Period (n=480/subreddit)")
+waffle_p1 <- make_waffle_plot(all_waffle_p1, "2024 Collection Period (n=430/subreddit)")
+waffle_p2 <- make_waffle_plot(all_waffle_p2, "2025 Collection Period (n=430/subreddit)")
 
 
 # ----------------------------------------
