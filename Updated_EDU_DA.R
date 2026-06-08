@@ -39,17 +39,17 @@ edd <- edd %>%
 hist(edd$days_since)
 
 set1 <- edd %>%
-  filter(days_since <= 400)
+  filter(days_since <= 400) 
 set2 <- edd %>%
   filter(days_since > 400)
 
 top50set1 <- set1 %>%
-  mutate(mean_engagement = ((not_engaged_iln + visible_disen_iln)/2)) %>%
-  arrange(desc(mean_engagement)) %>%
+  #mutate(mean_engagement = ((not_engaged_iln + visible_disen_iln)/2)) %>%
+  arrange(desc(nonchalance_iln)) %>%
   slice_head(n = 50)
 top50set2 <- set2 %>%
-  mutate(mean_engagement = ((not_engaged_iln + visible_disen_iln)/2)) %>%
-  arrange(desc(not_engaged_iln)) %>%
+  #mutate(mean_engagement = ((not_engaged_iln + visible_disen_iln)/2)) %>%
+  arrange(desc(nonchalance_iln)) %>%
   slice_head(n = 50)
 
 edd$top50_first <- ifelse(edd$case_id %in% top50set1$case_id, 1, 0)
@@ -58,12 +58,14 @@ edd$top50_second <- ifelse(edd$case_id %in% top50set2$case_id, 1, 0)
 avg_edd <- edd %>%
   filter(top50_first == 1 | top50_second == 1)
 
+
+
 # optionally create a sheet for qual exploration to share with team
 
 #library(googlesheets4)
 
 #gs4_auth()
-#gs4_create("Top 50 Disengagement Scored Posts (avg) by Time Period", sheets = avg_edd)
+#gs4_create("No Conseq Specific Sheet", sheets = avg_edd)
 
 edd$mean_engagement <- ((edd$not_engaged_iln + edd$visible_disen_iln)/2)
 
@@ -191,6 +193,7 @@ full_model_vars <- edd |>
     bad_parent_iln,
     phone_distraction_iln,
     mental_health_iln,
+    falling_behind_iln,
     Teachers,
     Professors,
     college,
@@ -226,7 +229,7 @@ mtext("Correlations of Full Sample ", at=2.5, line=-0.5, cex=2)
 summary(lm(mean_engagement ~
    nonchalance_iln +
    no_conseq_iln +
-   bad_parent_iln +
+   falling_behind_iln +
    phone_distraction_iln +
    mental_health_iln +
    Teachers +
@@ -241,8 +244,8 @@ summary(lm(mean_engagement ~
 #Full Sample Graphs
 plot_dd <- edd %>%
   select(mean_engagement, nonchalance_iln, no_conseq_iln, 
-    mental_health_iln, phone_distraction_iln) %>%
-  pivot_longer(cols = c(nonchalance_iln, no_conseq_iln, mental_health_iln, phone_distraction_iln),
+    mental_health_iln, falling_behind_iln) %>%
+  pivot_longer(cols = c(nonchalance_iln, no_conseq_iln, mental_health_iln, falling_behind_iln),
                names_to = "predictor",
                values_to = "value")
 
@@ -253,7 +256,7 @@ d <- ggplot(plot_dd, aes(x = value, y = mean_engagement)) +
     predictor = c(nonchalance_iln = "Nonchalant Index (r = .20)",
                   no_conseq_iln = "No Consequences Index (r = .24)",
                   mental_health_iln = "Mental Health Index (r = .27)",
-                  phone_distraction_iln = "Phone Distraction Index (r = .19)")
+                  falling_behind_iln = "Falling Behind Index (r = .35)")
   )) +
   labs(title = "Disengagement vs Predictors in the Full Sample",
        x = "Predictor value (log-scaled indices)",
@@ -272,8 +275,8 @@ table(Edu_specific$t_subreddit)
 
 plot_df <- Edu_specific %>%
   select(mean_engagement, nonchalance_iln, no_conseq_iln, 
-    mental_health_iln, phone_distraction_iln) %>%
-  pivot_longer(cols = c(nonchalance_iln, no_conseq_iln, mental_health_iln, phone_distraction_iln),
+    mental_health_iln, falling_behind_iln) %>%
+  pivot_longer(cols = c(nonchalance_iln, no_conseq_iln, mental_health_iln, falling_behind_iln),
                names_to = "predictor",
                values_to = "value")
 
@@ -284,7 +287,7 @@ f <- ggplot(plot_df, aes(x = value, y = mean_engagement)) +
     predictor = c(nonchalance_iln = "Nonchalant Index (r = .23)",
                   no_conseq_iln = "No Consequences Index (r = .26)",
                   mental_health_iln = "Mental Health Index (r = .24)",
-                  phone_distraction_iln = "Phone Distraction Index (r = .20)")
+                  falling_behind_iln = "Falling Behind Index (r = .37)")
   )) +
   labs(title = "Disengagement vs Predictors in Education Subsample (Teachers, Professors, & College)",
        x = "Predictor value (log-scaled indices)",
@@ -292,12 +295,15 @@ f <- ggplot(plot_df, aes(x = value, y = mean_engagement)) +
   theme_minimal()
 
 f
-cor(Edu_specific$mean_engagement, Edu_specific$phone_distraction_iln)
+cor(Edu_specific$mean_engagement, Edu_specific$no_conseq_iln)
+
+#______________________________________________________________________________________________________________
+# Subsample Linear Model
 
 summary(lm(mean_engagement ~
    nonchalance_iln +
    no_conseq_iln +
-   bad_parent_iln +
+   falling_behind_iln +
    phone_distraction_iln +
    mental_health_iln +
    score +
