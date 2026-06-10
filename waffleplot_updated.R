@@ -1,4 +1,3 @@
-
 # ---------------------------------------------------------#
 #   edu 2026 proj
 #   Ted, Will, Tess, Ayesha
@@ -10,80 +9,57 @@
 #  ``~~~~~~'   ((/'((((____/~~~~~~'(,(,___>      `~'
 # ---------------------------------------------------------#
 ##-------------------------------------------------------#
-# Creating TWO waffle plots using reddit data
+# Creating waffle plots for two subreddit groups across
+# four disengagement-related variables
 #          https://materialui.co/colors
 #
 #  original code in 2025 by: Miracle Sammons
 #  updated in 2026 by Ayesha Akbar and Ted Welser
 ##-----------------------------------------------------#
 
-# Load necessary libraries
 library(tidyverse)
 library(lubridate)
 
-# NOTE: if ggnewscale or patchwork are not installed, run:
 # install.packages(c("ggnewscale", "patchwork"))
 library(ggnewscale)
 library(patchwork)
 
 
 # ----------------------------------------
-# STEP 0: For updated version, 2026
-# use filter to create two datasets by dividing
-# at gap between the two ~year long data collection
-# periods. We will make two versions of the plot
-# one for each time period that are otherwise
-# similar. The API changed and reduced the #
-# of threads allowed per year period to ~500 per
-# subreddit, rather than 1000. So we want to
-# avoid conflating sampling change with empirical change.
-# After splitting into the samples we should explore
-# making a random sample of 480 per each subreddit.
-#
-# 2026 update notes (Ayesha):
-# - Dataset: edd15subs_indices.csv (Jan 2024 - Sep 2025, 15 subreddits)
-# - Split at Jan 1 2025: Period 1 = Jan-Dec 2024, Period 2 = Jan-Sep 2025
-# - Period 1 has 6 subreddits (~500-1000/sub), Period 2 has 15 (~430-500/sub)
-# - Sample 430/subreddit per period (limited by smallest Period 2 sub)
-# - Dates in M/D/YYYY format, parsed with mdy()
-# - Disengagement: average of visible_disen_iln and verbal_disengagement_iln
-# - Subreddit boolean columns derived from t_subreddit
-# - size= updated to linewidth= in geom_tile() (ggplot2 deprecation fix)
+# STEP 0: Overview
+# Two subreddit groups, four variables each.
+# Group 1: Teachers, Professors, College
+# Group 2: GradSchool, Academia, AskAcademia
+# Variables: not_engaged_iln, no_conseq_iln,
+#            falling_behind_iln, mental_health_iln
+# Data split at Jan 1 2025, sampled at 430/subreddit.
 # ----------------------------------------
 
 
 # ----------------------------------------
-# STEP 1: Load and clean the data
+# STEP 1: Load and clean data
 # ----------------------------------------
 
-# Load the 2026 combined dataset
 edd_raw <- read_csv("edd15subs_indices.csv")
 
 edd_raw <- edd_raw %>%
   mutate(
-    # Dates are in M/D/YYYY format in this dataset
-    t_date = mdy(t_date),
+    # Handle mixed date formats (MDY, DMY, YMD)
+    t_date = as.Date(parse_date_time(t_date, orders = c("mdy", "dmy", "ymd"))),
 
-    # Derive subreddit boolean columns from t_subreddit
-    sub_teachers   = t_subreddit == "Teachers",
-    sub_professors = t_subreddit %in% c("Professors", "AskAcademia", "GradSchool", "academia"),
-    sub_college    = t_subreddit == "college",
-
-    # Disengagement: average of two measures
-    disengage_combined = rowMeans(
-      select(., visible_disen_iln, verbal_disengagement_iln),
-      na.rm = TRUE
-    )
+    # Subreddit group flags
+    group1 = t_subreddit %in% c("Teachers", "Professors", "college"),
+    group2 = t_subreddit %in% c("GradSchool", "academia", "AskAcademia")
   ) %>%
-  filter(!is.na(disengage_combined)) %>%
+  filter(group1 | group2) %>%
   arrange(t_date)
 
+cat("Rows after filtering to 6 subreddits:", nrow(edd_raw), "\n")
+
 
 # ----------------------------------------
-# STEP 2: Split into two data collection periods
+# STEP 2: Split into two collection periods
 # ----------------------------------------
-# Period 1: Jan 2024 - Dec 2024 (original ~1000/sub API limit, 6 subreddits)
-# Period 2: Jan 2025 - Sep 2025 (reduced ~500/sub API limit, 15 subreddits)
 
 SPLIT_DATE <- as.Date("2025-01-01")
 
@@ -95,11 +71,8 @@ cat("Period 2 rows:", nrow(edd_p2), "\n")
 
 
 # ----------------------------------------
-# STEP 3: Random sample of 430 per subreddit per period
+# STEP 3: Sample 430 per subreddit per period
 # ----------------------------------------
-# 430 chosen as the sample size because the smallest
-# subreddit in Period 2 (highereducation) has ~134 rows,
-# so we sample up to 430 where available (replace=FALSE)
 
 set.seed(42)
 
@@ -113,8 +86,11 @@ sample_n_per_sub <- function(df, n = 430) {
 edd_p1_samp <- sample_n_per_sub(edd_p1, 430)
 edd_p2_samp <- sample_n_per_sub(edd_p2, 430)
 
-cat("Period 1 sample rows:", nrow(edd_p1_samp), "\n")
-cat("Period 2 sample rows:", nrow(edd_p2_samp), "\n")
+# Combine periods back together for plotting
+edd <- bind_rows(edd_p1_samp, edd_p2_samp) %>%
+  arrange(t_date)
+
+cat("Combined sample rows:", nrow(edd), "\n")
 
 
 # ----------------------------------------
@@ -133,11 +109,15 @@ month_abbrev <- function(dates) {
 
 
 # ----------------------------------------
-# STEP 5: Prepare a single period's data for plotting
+# STEP 5: Prepare data for a given variable and subreddit group
 # ----------------------------------------
 
-prepare_period <- function(df) {
+prepare_group <- function(df, subreddits, var_col) {
+
   df <- df %>%
+    filter(t_subreddit %in% subreddits) %>%
+    rename(index_var = !!sym(var_col)) %>%
+    filter(!is.na(index_var)) %>%
     arrange(t_date) %>%
     mutate(
       row_id = row_number(),
@@ -154,15 +134,11 @@ prepare_period <- function(df) {
 
   df <- df %>%
     mutate(decile = as.integer(decile)) %>%
-    left_join(decile_labels, by = "decile")
-
-  stopifnot("time_slice_label" %in% colnames(df))
-
-  df <- df %>%
+    left_join(decile_labels, by = "decile") %>%
     mutate(time_slice = factor(time_slice_label, levels = decile_labels$time_slice_label))
 
   qtiles <- quantile(
-    df$disengage_combined[df$disengage_combined > 0],
+    df$index_var[df$index_var > 0],
     probs = c(0.25, 0.5, 0.75),
     na.rm = TRUE
   )
@@ -170,65 +146,62 @@ prepare_period <- function(df) {
   df <- df %>%
     mutate(
       dis_cat = case_when(
-        disengage_combined == 0         ~ "None",
-        disengage_combined <= qtiles[1] ~ "Q1",
-        disengage_combined <= qtiles[2] ~ "Q2",
-        disengage_combined <= qtiles[3] ~ "Q3",
-        disengage_combined >  qtiles[3] ~ "Q4"
+        index_var == 0          ~ "None",
+        index_var <= qtiles[1]  ~ "Q1",
+        index_var <= qtiles[2]  ~ "Q2",
+        index_var <= qtiles[3]  ~ "Q3",
+        index_var >  qtiles[3]  ~ "Q4"
       ),
       dis_cat = factor(dis_cat, levels = c("None", "Q1", "Q2", "Q3", "Q4"))
     )
 
-  list(df = df, decile_labels = decile_labels)
+  df
 }
 
-prep_p1 <- prepare_period(edd_p1_samp)
-prep_p2 <- prepare_period(edd_p2_samp)
-
 
 # ----------------------------------------
-# STEP 6: Function to build waffle grid data per group
+# STEP 6: Build waffle grid data per subreddit
 # ----------------------------------------
 
-make_waffle_df <- function(df, subreddit_column, group_label) {
+make_waffle_df <- function(df, sub_name) {
   df %>%
-    filter(.data[[subreddit_column]] == TRUE) %>%
+    filter(t_subreddit == sub_name) %>%
     group_by(time_slice) %>%
     arrange(dis_cat, t_date) %>%
     mutate(
       id    = row_number(),
       x     = (id - 1) %% 4,
       y     = floor((id - 1) / 4),
-      group = group_label
+      group = sub_name
     ) %>%
     ungroup()
 }
 
-build_all_waffle <- function(df) {
-  df_teachers   <- make_waffle_df(df, "sub_teachers",   "Teachers")
-  df_professors <- make_waffle_df(df, "sub_professors", "Professors")
-  df_college    <- make_waffle_df(df, "sub_college",    "College")
 
-  bind_rows(df_teachers, df_professors, df_college) %>%
-    mutate(group = factor(group, levels = c("Teachers", "Professors", "College")))
-}
+# ----------------------------------------
+# STEP 7: Color palettes — one per subreddit
+# ----------------------------------------
 
-all_waffle_p1 <- build_all_waffle(prep_p1$df)
-all_waffle_p2 <- build_all_waffle(prep_p2$df)
+pal_teachers   <- c("None" = "#f6f5fb", "Q1" = "#cab2d6", "Q2" = "#9e9ac8", "Q3" = "#6a51a3", "Q4" = "#3f007d")
+pal_professors <- c("None" = "#f7fcf5", "Q1" = "#c7e9c0", "Q2" = "#74c476", "Q3" = "#238b45", "Q4" = "#00441b")
+pal_college    <- c("None" = "#f0f7fb", "Q1" = "#bdd7e7", "Q2" = "#6baed6", "Q3" = "#2171b5", "Q4" = "#08306b")
+pal_gradschool <- c("None" = "#fff5eb", "Q1" = "#fdd0a2", "Q2" = "#fd8d3c", "Q3" = "#d94801", "Q4" = "#7f2704")
+pal_academia   <- c("None" = "#f7f7f7", "Q1" = "#cccccc", "Q2" = "#737373", "Q3" = "#252525", "Q4" = "#000000")
+pal_askacad    <- c("None" = "#fff5f0", "Q1" = "#ffc09e", "Q2" = "#fc6e51", "Q3" = "#c0392b", "Q4" = "#7b241c")
+
+# Map subreddit name to palette
+pal_map <- list(
+  "Teachers"    = pal_teachers,
+  "Professors"  = pal_professors,
+  "college"     = pal_college,
+  "GradSchool"  = pal_gradschool,
+  "academia"    = pal_academia,
+  "AskAcademia" = pal_askacad
+)
 
 
 # ----------------------------------------
-# STEP 7: Color palettes
-# LINK FOR COLOR COMBOS: https://materialui.co/colors
-# ----------------------------------------
-
-pal_teachers <- c("None" = "#f6f5fb", "Q1" = "#cab2d6", "Q2" = "#9e9ac8", "Q3" = "#6a51a3", "Q4" = "#3f007d")
-pal_profs    <- c("None" = "#f7fcf5", "Q1" = "#c7e9c0", "Q2" = "#74c476", "Q3" = "#238b45", "Q4" = "#00441b")
-pal_college  <- c("None" = "#f0f7fb", "Q1" = "#bdd7e7", "Q2" = "#6baed6", "Q3" = "#2171b5", "Q4" = "#08306b")
-
-
-# ----------------------------------------
-# STEP 8: Legend plot (shared across both panels)
+# STEP 8: Legend plot
 # ----------------------------------------
 
 grey_pal <- c("None" = "#f0f0f0", "Q1" = "#bdbdbd", "Q2" = "#737373", "Q3" = "#404040", "Q4" = "#0d0d0d")
@@ -254,30 +227,43 @@ legend_plot <- ggplot() +
 
 
 # ----------------------------------------
-# STEP 9: Function to build a single waffle plot panel
+# STEP 9: Function to build one waffle plot for a group of subreddits
 # ----------------------------------------
 
-make_waffle_plot <- function(all_waffle, title_label) {
+make_group_waffle <- function(df, subreddits, var_col, title_label) {
 
-  df_t <- all_waffle %>% filter(group == "Teachers")
-  df_p <- all_waffle %>% filter(group == "Professors")
-  df_c <- all_waffle %>% filter(group == "College")
+  prepped <- prepare_group(df, subreddits, var_col)
 
-  ggplot() +
-    geom_tile(data = df_t, aes(x = x, y = y, fill = dis_cat),
-              color = "black", linewidth = 0.1, width = 0.9, height = 0.9) +
-    scale_fill_manual(values = pal_teachers, drop = FALSE) +
-    ggnewscale::new_scale_fill() +
+  # Build waffle df for each subreddit
+  waffle_list <- lapply(subreddits, function(s) make_waffle_df(prepped, s))
 
-    geom_tile(data = df_p, aes(x = x, y = y, fill = dis_cat),
-              color = "black", linewidth = 0.1, width = 0.9, height = 0.9) +
-    scale_fill_manual(values = pal_profs, drop = FALSE) +
-    ggnewscale::new_scale_fill() +
+  # Start ggplot
+  p <- ggplot()
 
-    geom_tile(data = df_c, aes(x = x, y = y, fill = dis_cat),
-              color = "black", linewidth = 0.1, width = 0.9, height = 0.9) +
-    scale_fill_manual(values = pal_college, drop = FALSE) +
+  for (i in seq_along(subreddits)) {
+    sub <- subreddits[[i]]
+    pal <- pal_map[[sub]]
+    wdf <- waffle_list[[i]]
 
+    if (i == 1) {
+      p <- p +
+        geom_tile(data = wdf, aes(x = x, y = y, fill = dis_cat, group = group),
+                  color = "white", linewidth = 0.05, width = 1, height = 1) +
+        scale_fill_manual(values = pal, drop = FALSE)
+    } else {
+      p <- p +
+        ggnewscale::new_scale_fill() +
+        geom_tile(data = wdf, aes(x = x, y = y, fill = dis_cat, group = group),
+                  color = "white", linewidth = 0.05, width = 1, height = 1) +
+        scale_fill_manual(values = pal, drop = FALSE)
+    }
+  }
+
+  # Combine all waffle data for faceting
+  all_waffle <- bind_rows(waffle_list) %>%
+    mutate(group = factor(group, levels = subreddits))
+
+  p +
     facet_grid(group ~ time_slice, switch = "x") +
     coord_fixed() +
     scale_y_continuous(
@@ -298,28 +284,83 @@ make_waffle_plot <- function(all_waffle, title_label) {
       strip.background = element_blank(),
       strip.placement  = "outside",
       strip.text.x     = element_text(size = 7, face = "bold", margin = margin(t = 2, b = 0)),
-      strip.text.y     = element_blank(),
+      strip.text.y     = element_text(size = 8, face = "bold"),
       plot.title       = element_text(size = 11, face = "bold", hjust = 0.5)
     )
 }
 
-waffle_p1 <- make_waffle_plot(all_waffle_p1, "2024 Collection Period (n=430/subreddit)")
-waffle_p2 <- make_waffle_plot(all_waffle_p2, "2025 Collection Period (n=430/subreddit)")
+
+# ----------------------------------------
+# STEP 10: Define groups and variables
+# ----------------------------------------
+
+group1_subs <- c("Teachers", "Professors", "college")
+group2_subs <- c("GradSchool", "academia", "AskAcademia")
+
+variables <- list(
+  "not_engaged_iln"    = "Not Engaged",
+  "no_conseq_iln"      = "No Consequences",
+  "falling_behind_iln" = "Falling Behind",
+  "mental_health_iln"  = "Mental Health"
+)
 
 
 # ----------------------------------------
-# STEP 10: Combine legend + two plots
+# STEP 11: Build and display all 8 plots
 # ----------------------------------------
 
-final_plot <- legend_plot / (waffle_p1 | waffle_p2) +
-  plot_layout(heights = c(1, 20))
+for (var_col in names(variables)) {
+  var_label <- variables[[var_col]]
+
+  p1 <- make_group_waffle(edd, group1_subs, var_col,
+                          paste0(var_label, " — Teachers / Professors / College"))
+  p2 <- make_group_waffle(edd, group2_subs, var_col,
+                          paste0(var_label, " — GradSchool / Academia / AskAcademia"))
+
+  final <- legend_plot / p1 / p2 +
+    plot_layout(heights = c(1, 20, 20))
+
+  print(final)
+  cat("Displayed:", var_label, "\n")
+}
 
 
 # ----------------------------------------
-# STEP 11: Display
+# STEP 11: Build and display all 8 plots
 # ----------------------------------------
 
-print(final_plot)
+for (var_col in names(variables)) {
+  var_label <- variables[[var_col]]
 
-# Optional: save to file
-# ggsave("waffle_2026_combined.png", final_plot, width = 20, height = 10, dpi = 150)
+  p1 <- make_group_waffle(edd, group1_subs, var_col,
+                          paste0(var_label, " — College / Professors / Teachers"))
+  p2 <- make_group_waffle(edd, group2_subs, var_col,
+                          paste0(var_label, " — Academia / AskAcademia / GradSchool"))
+
+  final <- legend_plot / p1 / p2 +
+    plot_layout(heights = c(1, 60, 60))
+
+  print(final)
+  cat("Displayed:", var_label, "\n")
+}
+
+
+
+# Optional: save each plot
+# for (var_col in names(variables)) {
+#   var_label <- variables[[var_col]]
+#   p1 <- make_group_waffle(edd, group1_subs, var_col, paste0(var_label, " — Group 1"))
+#   p2 <- make_group_waffle(edd, group2_subs, var_col, paste0(var_label, " — Group 2"))
+#   final <- legend_plot / p1 / p2 + plot_layout(heights = c(1, 20, 20))
+#   ggsave(paste0("waffle_", var_col, ".png"), final, width = 20, height = 16, dpi = 150)
+# }
+
+
+# Optional: save each plot
+ for (var_col in names(variables)) {
+   var_label <- variables[[var_col]]
+   p1 <- make_group_waffle(edd, group1_subs, var_col, paste0(var_label, " — Group 1"))
+   p2 <- make_group_waffle(edd, group2_subs, var_col, paste0(var_label, " — Group 2"))
+   final <- legend_plot / p1 / p2 + plot_layout(heights = c(1, 20, 20))
+   ggsave(paste0("waffle_", var_col, ".png"), final, width = 20, height = 16, dpi = 150)
+ }
