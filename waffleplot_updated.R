@@ -8,14 +8,14 @@
 # (      -\.._,.;;'._ ,(   }        _`_-_,,    `, `,
 #  ``~~~~~~'   ((/'((((____/~~~~~~'(,(,___>      `~'
 # ---------------------------------------------------------#
-##-------------------------------------------------------#
-# Creating waffle plots for two subreddit groups across
-# four disengagement-related variables
-#          https://materialui.co/colors
+#
+#  Creating waffle plots for two subreddit groups across
+#  four disengagement-related variables.
+#  Palette reference: https://materialui.co/colors
 #
 #  original code in 2025 by: Miracle Sammons
 #  updated in 2026 by Ayesha Akbar and Ted Welser
-##-----------------------------------------------------#
+# ---------------------------------------------------------#
 
 library(tidyverse)
 library(lubridate)
@@ -25,20 +25,38 @@ library(ggnewscale)
 library(patchwork)
 
 
-# ----------------------------------------
-# STEP 0: Overview
+# --- RENDER SETTINGS: tune the look here ------------------
+
+# Gap between panels, in points (ggplot default is ~5.5, 0 is fine).
+PANEL_SPACING_X_PT <- 1   # between the 10 time strips
+PANEL_SPACING_Y_PT <- 2   # between subreddit rows
+
+# Relative heights: legend / group 1 block / group 2 block.
+BLOCK_HEIGHTS <- c(1, 20, 20)
+
+# Saving, tuned for the "large render" look. Fonts are fixed in
+# points, so a bigger canvas makes text small relative to the panels
+# (the favorable data-to-whitespace ratio). The plot is fixed-aspect
+# (coord_fixed), so match the canvas shape to it: if the saved file
+# shows white margins on the sides raise SAVE_ASPECT, on top/bottom
+# lower it.
+SAVE_PLOTS  <- FALSE
+SAVE_WIDTH  <- 16                        # inches; overall size
+SAVE_ASPECT <- 1.25                      # height / width (>1 = taller)
+SAVE_HEIGHT <- SAVE_WIDTH * SAVE_ASPECT  # inches
+SAVE_DPI    <- 300                       # 300 print, 150 screen
+
+
+# --- STEP 0: Overview -------------------------------------
 # Two subreddit groups, four variables each.
 # Group 1: Teachers, Professors, College
 # Group 2: GradSchool, Academia, AskAcademia
 # Variables: not_engaged_iln, no_conseq_iln,
 #            falling_behind_iln, mental_health_iln
 # Data split at Jan 1 2025, sampled at 430/subreddit.
-# ----------------------------------------
 
 
-# ----------------------------------------
-# STEP 1: Load and clean data
-# ----------------------------------------
+# --- STEP 1: Load and clean data --------------------------
 
 edd_raw <- read_csv("edd15subs_indices.csv")
 
@@ -57,9 +75,7 @@ edd_raw <- edd_raw %>%
 cat("Rows after filtering to 6 subreddits:", nrow(edd_raw), "\n")
 
 
-# ----------------------------------------
-# STEP 2: Split into two collection periods
-# ----------------------------------------
+# --- STEP 2: Split into two collection periods ------------
 
 SPLIT_DATE <- as.Date("2025-01-01")
 
@@ -70,9 +86,7 @@ cat("Period 1 rows:", nrow(edd_p1), "\n")
 cat("Period 2 rows:", nrow(edd_p2), "\n")
 
 
-# ----------------------------------------
-# STEP 3: Sample 430 per subreddit per period
-# ----------------------------------------
+# --- STEP 3: Sample 430 per subreddit per period ----------
 
 set.seed(42)
 
@@ -93,9 +107,7 @@ edd <- bind_rows(edd_p1_samp, edd_p2_samp) %>%
 cat("Combined sample rows:", nrow(edd), "\n")
 
 
-# ----------------------------------------
-# STEP 4: Month abbreviation helper
-# ----------------------------------------
+# --- STEP 4: Month abbreviation helper --------------------
 
 month_abbrev <- function(dates) {
   abbr <- format(dates, "%b")
@@ -108,9 +120,7 @@ month_abbrev <- function(dates) {
 }
 
 
-# ----------------------------------------
-# STEP 5: Prepare data for a given variable and subreddit group
-# ----------------------------------------
+# --- STEP 5: Prepare data for a given variable and group ---
 
 prepare_group <- function(df, subreddits, var_col) {
 
@@ -159,9 +169,7 @@ prepare_group <- function(df, subreddits, var_col) {
 }
 
 
-# ----------------------------------------
-# STEP 6: Build waffle grid data per subreddit
-# ----------------------------------------
+# --- STEP 6: Build waffle grid data per subreddit ---------
 
 make_waffle_df <- function(df, sub_name) {
   df %>%
@@ -178,9 +186,7 @@ make_waffle_df <- function(df, sub_name) {
 }
 
 
-# ----------------------------------------
-# STEP 7: Color palettes — one per subreddit
-# ----------------------------------------
+# --- STEP 7: Color palettes, one per subreddit ------------
 
 pal_teachers   <- c("None" = "#f6f5fb", "Q1" = "#cab2d6", "Q2" = "#9e9ac8", "Q3" = "#6a51a3", "Q4" = "#3f007d")
 pal_professors <- c("None" = "#f7fcf5", "Q1" = "#c7e9c0", "Q2" = "#74c476", "Q3" = "#238b45", "Q4" = "#00441b")
@@ -200,9 +206,7 @@ pal_map <- list(
 )
 
 
-# ----------------------------------------
-# STEP 8: Legend plot
-# ----------------------------------------
+# --- STEP 8: Legend plot ----------------------------------
 
 grey_pal <- c("None" = "#f0f0f0", "Q1" = "#bdbdbd", "Q2" = "#737373", "Q3" = "#404040", "Q4" = "#0d0d0d")
 
@@ -226,9 +230,7 @@ legend_plot <- ggplot() +
   coord_fixed(expand = FALSE, xlim = c(0, 6), ylim = c(0.1, 1.5))
 
 
-# ----------------------------------------
-# STEP 9: Function to build one waffle plot for a group of subreddits
-# ----------------------------------------
+# --- STEP 9: Build one waffle plot for a group ------------
 
 make_group_waffle <- function(df, subreddits, var_col, title_label) {
 
@@ -259,10 +261,6 @@ make_group_waffle <- function(df, subreddits, var_col, title_label) {
     }
   }
 
-  # Combine all waffle data for faceting
-  all_waffle <- bind_rows(waffle_list) %>%
-    mutate(group = factor(group, levels = subreddits))
-
   p +
     facet_grid(group ~ time_slice, switch = "x") +
     coord_fixed() +
@@ -285,14 +283,14 @@ make_group_waffle <- function(df, subreddits, var_col, title_label) {
       strip.placement  = "outside",
       strip.text.x     = element_text(size = 7, face = "bold", margin = margin(t = 2, b = 0)),
       strip.text.y     = element_text(size = 8, face = "bold"),
-      plot.title       = element_text(size = 11, face = "bold", hjust = 0.5)
+      plot.title       = element_text(size = 11, face = "bold", hjust = 0.5),
+      panel.spacing.x  = unit(PANEL_SPACING_X_PT, "pt"),  # gap between time strips
+      panel.spacing.y  = unit(PANEL_SPACING_Y_PT, "pt")   # gap between subreddit rows
     )
 }
 
 
-# ----------------------------------------
-# STEP 10: Define groups and variables
-# ----------------------------------------
+# --- STEP 10: Define groups and variables -----------------
 
 group1_subs <- c("Teachers", "Professors", "college")
 group2_subs <- c("GradSchool", "academia", "AskAcademia")
@@ -305,62 +303,27 @@ variables <- list(
 )
 
 
-# ----------------------------------------
-# STEP 11: Build and display all 8 plots
-# ----------------------------------------
+# --- STEP 11: Build, display, and (optionally) save -------
+# Same `final` is printed and saved, so screen matches the PNG.
 
 for (var_col in names(variables)) {
   var_label <- variables[[var_col]]
 
   p1 <- make_group_waffle(edd, group1_subs, var_col,
-                          paste0(var_label, " — Teachers / Professors / College"))
+                          paste0(var_label, ": ", paste(group1_subs, collapse = " / ")))
   p2 <- make_group_waffle(edd, group2_subs, var_col,
-                          paste0(var_label, " — GradSchool / Academia / AskAcademia"))
+                          paste0(var_label, ": ", paste(group2_subs, collapse = " / ")))
 
   final <- legend_plot / p1 / p2 +
-    plot_layout(heights = c(1, 20, 20))
+    plot_layout(heights = BLOCK_HEIGHTS)
 
   print(final)
   cat("Displayed:", var_label, "\n")
+
+  if (SAVE_PLOTS) {
+    out_name <- paste0("waffle_", var_col, ".png")
+    ggsave(out_name, final, width = SAVE_WIDTH, height = SAVE_HEIGHT,
+           dpi = SAVE_DPI, bg = "white")
+    cat("Saved:", out_name, "\n")
+  }
 }
-
-
-# ----------------------------------------
-# STEP 11: Build and display all 8 plots
-# ----------------------------------------
-
-for (var_col in names(variables)) {
-  var_label <- variables[[var_col]]
-
-  p1 <- make_group_waffle(edd, group1_subs, var_col,
-                          paste0(var_label, " — College / Professors / Teachers"))
-  p2 <- make_group_waffle(edd, group2_subs, var_col,
-                          paste0(var_label, " — Academia / AskAcademia / GradSchool"))
-
-  final <- legend_plot / p1 / p2 +
-    plot_layout(heights = c(1, 60, 60))
-
-  print(final)
-  cat("Displayed:", var_label, "\n")
-}
-
-
-
-# Optional: save each plot
-# for (var_col in names(variables)) {
-#   var_label <- variables[[var_col]]
-#   p1 <- make_group_waffle(edd, group1_subs, var_col, paste0(var_label, " — Group 1"))
-#   p2 <- make_group_waffle(edd, group2_subs, var_col, paste0(var_label, " — Group 2"))
-#   final <- legend_plot / p1 / p2 + plot_layout(heights = c(1, 20, 20))
-#   ggsave(paste0("waffle_", var_col, ".png"), final, width = 20, height = 16, dpi = 150)
-# }
-
-
-# Optional: save each plot
- for (var_col in names(variables)) {
-   var_label <- variables[[var_col]]
-   p1 <- make_group_waffle(edd, group1_subs, var_col, paste0(var_label, " — Group 1"))
-   p2 <- make_group_waffle(edd, group2_subs, var_col, paste0(var_label, " — Group 2"))
-   final <- legend_plot / p1 / p2 + plot_layout(heights = c(1, 20, 20))
-   ggsave(paste0("waffle_", var_col, ".png"), final, width = 20, height = 16, dpi = 150)
- }
