@@ -1,0 +1,443 @@
+# Hi! This is the file which explains how we generated
+# waffleplots. Please read the instructions carefully as we
+# will change code bits.
+#
+#   Original code 2025 by Miracle Sammons
+#   Research version 2026 by Ayesha Akbar and Ted Welser
+#   Teaching version 2026  by Ayesha Akbar
+#
+# LESSON: Waffle plots across time
+#
+# OBJECTIVE
+# Read a finished plotting pipeline, run it, then practice the two
+# ideas at its core: cutting a variable into quartiles, and placing
+# items on a square grid. You will fix a broken function and build
+# one from scratch.
+#
+# WHAT A WAFFLE PLOT SHOWS
+# Each small square is one thread. Squares are shaded by quartile,
+# so darker means higher values. Groups stack on rows, time runs
+# left to right across columns. Reading across is reading over time.
+#
+# HOW TO RUN
+# Source the whole file, or step through it top to bottom. In the
+# console run: source("waffleplot_teaching.R").
+# We work by commenting and uncommenting code as we go, so read each
+# note before you run the block under it.
+#
+# HOW THIS FILE IS ORDERED
+#   PART 1  SETUP    packages, a tiny check() helper, and CONFIG
+#   PART 2  TOOLS    the functions that do the work
+#   PART 3  OBSERVE  run the real pipeline and look at the output
+#   PART 4  FIX      repair a broken function so the checks pass
+#   PART 5  BUILD    write a function yourself so the checks pass
+#
+# TAGS you will see (your editor highlights these):
+#   CONCEPT  an idea explained in plain language
+#   TODO     something for you to write
+#   FIXME    a deliberate bug for you to repair
+
+
+# --- PART 1: SETUP ----------------------------------------
+
+# CONCEPT: a check() helper.
+# R has no built-in pass/fail printer for little exercises, so we
+# make one. Give it a label and a TRUE/FALSE test. It prints PASS
+# or FAIL. The tasks at the end use this for instant feedback.
+check <- function(label, passed) {
+  if (isTRUE(passed)) {
+    cat("PASS: ", label, "\n", sep = "")
+  } else {
+    cat("FAIL: ", label, "\n", sep = "")
+  }
+  invisible(isTRUE(passed))
+}
+
+# Packages.
+# tidyverse gives us dplyr and ggplot2. lubridate parses dates.
+# ggnewscale lets each group use its own color scale in one plot.
+# patchwork stacks the legend and the panels into one figure.
+# install.packages(c("tidyverse", "lubridate", "ggnewscale", "patchwork"))
+library(tidyverse)
+library(lubridate)
+library(ggnewscale)
+library(patchwork)
+
+
+# --- CONFIG: the only block you edit ----------------------
+
+# Your data file.
+# Path to the CSV. Must sit in your working directory, or give a
+# full path.
+DATA_FILE <- "edd15subs_indices.csv"
+
+# Column names in your data.
+# Tell the script which columns hold the grouping label and the
+# date. Change the right-hand strings to match your own file.
+COL_GROUP <- "t_subreddit"   # column that labels each row's group
+COL_DATE  <- "t_date"        # column with the date of each row
+
+# Which groups go on which row of the plot.
+# Each panel row is one set of groups plotted together. Put the
+# exact values from COL_GROUP here. Add or remove names freely.
+# You can also add a third or fourth row by adding more entries.
+PANEL_ROWS <- list(
+  "Coll / Prof / Teach"      = c("Teachers", "Professors", "college"),
+  "Acad / AskAcad / GradS"  = c("GradSchool", "academia", "AskAcademia")
+)
+
+# Which variables to plot.
+# Left side is the column name in your data. Right side is the
+# label that shows up in the plot title. One plot set per variable.
+VARIABLES <- list(
+  "not_engaged_iln"    = "Not Engaged",
+  "no_conseq_iln"      = "No Consequences",
+  "falling_behind_iln" = "Falling Behind",
+  "mental_health_iln"  = "Mental Health"
+)
+
+# Sampling and time settings.
+SAMPLE_PER_GROUP <- 430                     # rows kept per group, per period
+SPLIT_DATE       <- as.Date("2025-01-01")   # boundary between the two periods
+N_TIME_SLICES    <- 10                      # number of columns across (time bins)
+WAFFLE_COLS      <- 4                       # squares per row inside each tile block
+RANDOM_SEED      <- 42                      # fixes the sample so results repeat
+
+# Saving.
+# Leave SAVE_PLOTS as FALSE to just view plots on screen. Set it
+# to TRUE to also write one PNG per variable into SAVE_DIR.
+SAVE_PLOTS <- FALSE
+SAVE_DIR   <- "."
+
+# Group list used in several places below.
+all_groups <- unlist(PANEL_ROWS, use.names = FALSE)
+
+# --- END OF CONFIG. You should not need to edit below here. ---
+
+
+# --- PART 2: TOOLS ----------------------------------------
+# These are the functions the pipeline calls. Defining a function
+# does not run it, so this whole part is safe to source even with
+# no data loaded. PART 3 is where they actually get used.
+
+# CONCEPT: short month-day labels.
+# Turns a date into a compact tag like "Ja07" so column headers
+# stay readable when there are many time slices.
+
+month_abbrev <- function(dates) {
+  abbr <- format(dates, "%b")
+  abbr <- str_replace_all(abbr, c(
+    "Jan" = "Ja", "Feb" = "Fb", "Mar" = "Mr", "Apr" = "Ap",
+    "May" = "My", "Jun" = "Jn", "Jul" = "Jl", "Aug" = "Au",
+    "Sep" = "Sp", "Oct" = "Oc", "Nov" = "Nv", "Dec" = "De"
+  ))
+  paste0(abbr, format(dates, "%d"))
+}
+
+# CONCEPT: even sampling.
+# Drawing the same number of rows per group keeps one busy group
+# from dominating the picture.
+sample_n_per_group <- function(df, n) {
+  df %>%
+    group_by(.group) %>%
+    slice_sample(n = n, replace = FALSE) %>%
+    ungroup()
+}
+
+# CONCEPT: prepare one variable for one panel row.
+# Three jobs. First slice the rows into N_TIME_SLICES equal time
+# bins and label each bin by its start date. Then cut the variable
+# into quartiles, computed on the nonzero values, with a separate
+# "None" bucket for exact zeros. The Fix task in PART 4 is a small
+# version of this quartile step.
+prepare_panel <- function(df, groups, var_col) {
+
+  df <- df %>%
+    filter(.group %in% groups) %>%
+    rename(index_var = !!sym(var_col)) %>%
+    filter(!is.na(index_var)) %>%
+    arrange(.date) %>%
+    mutate(
+      row_id    = row_number(),
+      time_bin  = ntile(row_id, N_TIME_SLICES)
+    )
+
+  bin_labels <- df %>%
+    group_by(time_bin) %>%
+    summarize(start_date = min(.date), .groups = "drop") %>%
+    mutate(
+      time_slice_label = month_abbrev(start_date),
+      time_bin         = as.integer(time_bin)
+    )
+
+  df <- df %>%
+    mutate(time_bin = as.integer(time_bin)) %>%
+    left_join(bin_labels, by = "time_bin") %>%
+    mutate(time_slice = factor(time_slice_label, levels = bin_labels$time_slice_label))
+
+  qtiles <- quantile(
+    df$index_var[df$index_var > 0],
+    probs = c(0.25, 0.5, 0.75),
+    na.rm = TRUE
+  )
+
+  df %>%
+    mutate(
+      dis_cat = case_when(
+        index_var == 0          ~ "None",
+        index_var <= qtiles[1]  ~ "Q1",
+        index_var <= qtiles[2]  ~ "Q2",
+        index_var <= qtiles[3]  ~ "Q3",
+        index_var >  qtiles[3]  ~ "Q4"
+      ),
+      dis_cat = factor(dis_cat, levels = c("None", "Q1", "Q2", "Q3", "Q4"))
+    )
+}
+
+# CONCEPT: lay a group's rows out as a square grid.
+# Within a time slice, rows are ordered by quartile then date and
+# placed left to right, top to bottom, WAFFLE_COLS squares wide.
+# That x and y position is what geom_tile draws. The Build task in
+# PART 5 asks you to recreate this x and y math on its own.
+make_waffle_df <- function(df, grp_name) {
+  df %>%
+    filter(.group == grp_name) %>%
+    group_by(time_slice) %>%
+    arrange(dis_cat, .date) %>%
+    mutate(
+      id    = row_number(),
+      x     = (id - 1) %% WAFFLE_COLS,
+      y     = floor((id - 1) / WAFFLE_COLS),
+      group = grp_name
+    ) %>%
+    ungroup()
+}
+
+# CONCEPT: palettes assigned automatically.
+# The research version named a palette for each subreddit. Here we
+# keep a pool of palettes and hand them out in order to whatever
+# groups CONFIG defines, so new group names just work. If you have
+# more groups than palettes, the pool recycles.
+palette_pool <- list(
+  c(None = "#f6f5fb", Q1 = "#cab2d6", Q2 = "#9e9ac8", Q3 = "#6a51a3", Q4 = "#3f007d"), # purple
+  c(None = "#f7fcf5", Q1 = "#c7e9c0", Q2 = "#74c476", Q3 = "#238b45", Q4 = "#00441b"), # green
+  c(None = "#f0f7fb", Q1 = "#bdd7e7", Q2 = "#6baed6", Q3 = "#2171b5", Q4 = "#08306b"), # blue
+  c(None = "#fff5eb", Q1 = "#fdd0a2", Q2 = "#fd8d3c", Q3 = "#d94801", Q4 = "#7f2704"), # orange
+  c(None = "#f7f7f7", Q1 = "#cccccc", Q2 = "#737373", Q3 = "#252525", Q4 = "#000000"), # grey
+  c(None = "#fff5f0", Q1 = "#ffc09e", Q2 = "#fc6e51", Q3 = "#c0392b", Q4 = "#7b241c")  # red
+)
+
+# Build a name to palette lookup covering every group in CONFIG.
+pal_map <- setNames(
+  lapply(seq_along(all_groups), function(i) {
+    palette_pool[[((i - 1) %% length(palette_pool)) + 1]]
+  }),
+  all_groups
+)
+
+# CONCEPT: a shared legend strip.
+# A neutral grey key explaining the quartile shading, drawn once
+# and placed above the panels so each plot does not repeat it.
+grey_pal <- c(None = "#f0f0f0", Q1 = "#bdbdbd", Q2 = "#737373", Q3 = "#404040", Q4 = "#0d0d0d")
+
+legend_df <- tibble(
+  dis_cat = factor(c("None", "Q1", "Q2", "Q3", "Q4"), levels = c("None", "Q1", "Q2", "Q3", "Q4")),
+  x = 1:5,
+  y = 1
+)
+
+legend_plot <- ggplot() +
+  geom_text(aes(x = 0, y = 1, label = "Quartile Range:"), hjust = 1, size = 3, fontface = "bold") +
+  geom_tile(
+    data = legend_df,
+    aes(x = x, y = y, fill = dis_cat),
+    color = "black", linewidth = 0.3, width = 0.6, height = 0.6
+  ) +
+  geom_text(data = legend_df, aes(x = x, y = y - 0.7, label = dis_cat), color = "black", size = 2) +
+  scale_fill_manual(values = grey_pal) +
+  theme_void() +
+  theme(legend.position = "none", plot.margin = margin(5, 5, 5, 5)) +
+  coord_fixed(expand = FALSE, xlim = c(0, 6), ylim = c(0.1, 1.5))
+
+# CONCEPT: build one panel row of waffles.
+# For a set of groups and one variable, prepare the data, grid each
+# group, then layer them with a fresh fill scale per group so their
+# colors do not collide. facet_grid puts groups on rows and time
+# slices on columns. The y axis is relabeled to count threads
+# rather than grid rows.
+make_panel_waffle <- function(df, groups, var_col, title_label) {
+
+  prepped <- prepare_panel(df, groups, var_col)
+  waffle_list <- lapply(groups, function(s) make_waffle_df(prepped, s))
+
+  p <- ggplot()
+
+  for (i in seq_along(groups)) {
+    grp <- groups[[i]]
+    pal <- pal_map[[grp]]
+    wdf <- waffle_list[[i]]
+
+    if (i == 1) {
+      p <- p +
+        geom_tile(data = wdf, aes(x = x, y = y, fill = dis_cat, group = group),
+                  color = "white", linewidth = 0.02, width = 1.2, height = 1) +    #here
+        scale_fill_manual(values = pal, drop = FALSE)
+    } else {
+      p <- p +
+        ggnewscale::new_scale_fill() +
+        geom_tile(data = wdf, aes(x = x, y = y, fill = dis_cat, group = group),
+                  color = "white", linewidth = 0.02, width = 1.2, height = 1) +
+        scale_fill_manual(values = pal, drop = FALSE)
+    }
+  }
+
+  p +
+    facet_grid(group ~ time_slice, switch = "x") +
+    coord_fixed() +
+    scale_y_continuous(
+      breaks = seq(0, 25, by = 5),
+      labels = function(y) y * WAFFLE_COLS,
+      expand = expansion(mult = c(0, 0.05))
+    ) +
+    labs(title = title_label) +
+    theme_minimal(base_size = 14) +
+    theme(
+      panel.grid       = element_blank(),
+      axis.text.x      = element_blank(),
+      axis.title.x     = element_blank(),
+      axis.title.y     = element_blank(),
+      axis.text.y      = element_text(size = 8),
+      axis.ticks.y     = element_line(),
+      legend.position  = "none",
+      strip.background = element_blank(),
+      strip.placement  = "outside",
+      strip.text.x     = element_text(size = 7, face = "bold", margin = margin(t = 1, b = 0)),
+      strip.text.y     = element_text(size = 8, face = "bold"),
+      plot.title       = element_text(size = 8, face = "bold", hjust = 0.5)
+    )
+}
+
+
+# --- PART 3: OBSERVE (run the real pipeline) --------------
+# This is the working example. It loads the data, splits it into
+# two periods, samples evenly, then draws one figure per variable.
+# It only runs if DATA_FILE exists, so if you do not have the data
+# yet you can still reach the Fix and Build tasks below.
+#
+# Reading the data in: load, parse the date (handling a few common
+# orderings), keep only the groups named in CONFIG. Note we reach
+# columns through COL_GROUP and COL_DATE, never a fixed name, which
+# is what makes this reusable.
+
+if (file.exists(DATA_FILE)) {
+
+  edd_raw <- read_csv(DATA_FILE) %>%
+    mutate(
+      .date  = as.Date(parse_date_time(.data[[COL_DATE]], orders = c("mdy", "dmy", "ymd"))),
+      .group = .data[[COL_GROUP]]
+    ) %>%
+    filter(.group %in% all_groups) %>%
+    arrange(.date)
+
+  cat("Rows after filtering to", length(all_groups), "groups:", nrow(edd_raw), "\n")
+
+  # Split: before SPLIT_DATE is period 1, on or after is period 2.
+  edd_p1 <- edd_raw %>% filter(.date <  SPLIT_DATE)
+  edd_p2 <- edd_raw %>% filter(.date >= SPLIT_DATE)
+  cat("Period 1 rows:", nrow(edd_p1), " Period 2 rows:", nrow(edd_p2), "\n")
+
+  # Sample each period evenly, then recombine. The seed makes the
+  # draw repeatable, so you and a classmate get the same squares.
+  set.seed(RANDOM_SEED)
+  edd <- bind_rows(
+    sample_n_per_group(edd_p1, SAMPLE_PER_GROUP),
+    sample_n_per_group(edd_p2, SAMPLE_PER_GROUP)
+  ) %>% arrange(.date)
+  cat("Combined sample rows:", nrow(edd), "\n")
+
+  # One figure per variable. Each stacks the legend on top of one
+  # panel row per entry in PANEL_ROWS. This loop reads entirely
+  # from CONFIG, so adding a variable or a row needs no change here.
+  row_labels <- names(PANEL_ROWS)
+  for (var_col in names(VARIABLES)) {
+    var_label <- VARIABLES[[var_col]]
+
+    panels <- lapply(row_labels, function(rl) {
+      make_panel_waffle(edd, PANEL_ROWS[[rl]], var_col,
+                        paste0(var_label, ": ", rl))
+    })
+
+    final <- wrap_plots(c(list(legend_plot), panels), ncol = 1,
+                        heights = c(1, rep(20, length(panels))))
+    print(final)
+    cat("Displayed:", var_label, "\n")
+
+    if (SAVE_PLOTS) {
+      out_path <- file.path(SAVE_DIR, paste0("waffle_", var_col, ".png"))
+      ggsave(out_path, final, width = 20, height = 16, dpi = 150)
+      cat("Saved:", out_path, "\n")
+    }
+  }
+
+} else {
+  message("DATA_FILE not found: '", DATA_FILE, "'. ",
+          "Skipping the working example. You can still do TASK 1 and TASK 2 below.")
+}
+
+
+# --- PART 4: FIX (repair the broken function) -------------
+# CONCEPT: this is a stripped-down version of the quartile step
+# inside prepare_panel. Given three cut points, it should sort a
+# value into Q1, Q2, Q3, or Q4.
+#
+# FIXME: one comparison points at the wrong cut, so the highest
+# values land in the wrong bucket. Fix the marked line, then run
+# this block. All four checks should print PASS.
+
+assign_quartile <- function(x, cuts) {
+  if (x <= cuts[1]) return("Q1")
+  if (x <= cuts[2]) return("Q2")
+  if (x <= cuts[3]) return("Q3")   # FIXME: should compare against cuts[3]
+  return("Q4")
+}
+
+# Automated checks for TASK 1. Wrapped so an error here cannot stop
+# the rest of the file from running.
+tryCatch({
+  cuts <- c(10, 20, 30)
+  check("value 5 lands in Q1",  assign_quartile(5,  cuts) == "Q1")
+  check("value 15 lands in Q2", assign_quartile(15, cuts) == "Q2")
+  check("value 25 lands in Q3", assign_quartile(25, cuts) == "Q3")
+  check("value 40 lands in Q4", assign_quartile(40, cuts) == "Q4")
+}, error = function(e) cat("Task 1 error:", conditionMessage(e), "\n"))
+
+
+# --- PART 5: BUILD (write the function yourself) ----------
+# CONCEPT: this is the grid math from make_waffle_df. Squares fill
+# a grid that is `cols` wide, left to right, then top to bottom.
+# Square 1 sits at the top left. Both x and y start at 0.
+#
+#   x is the column: how far across.   y is the row: how far down.
+#
+# TODO: complete grid_position so it returns list(x = ..., y = ...).
+# Hint: the modulo operator %% gives a remainder, and integer
+# division %/% gives a whole-number quotient. Replace the two NULLs,
+# then run this block. All three checks should print PASS.
+
+grid_position <- function(i, cols) {
+  # Write your code below this line.
+  x <- NULL
+  y <- NULL
+
+  list(x = x, y = y)
+}
+
+# Automated checks for TASK 2.
+tryCatch({
+  p1 <- grid_position(1, 4)
+  p5 <- grid_position(5, 4)
+  p7 <- grid_position(7, 4)
+  check("square 1 sits at x=0, y=0", identical(p1$x, 0) && identical(p1$y, 0))
+  check("square 5 sits at x=0, y=1", identical(p5$x, 0) && identical(p5$y, 1))
+  check("square 7 sits at x=2, y=1", identical(p7$x, 2) && identical(p7$y, 1))
+}, error = function(e) cat("Task 2 error:", conditionMessage(e), "\n"))
